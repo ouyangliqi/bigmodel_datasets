@@ -1,0 +1,10 @@
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-01-filter/minhash/ > minhash_log/gpt_perplexity.2021.01.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-03-filter/minhash/ > minhash_log/gpt_perplexity.2021.03.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-04-filter/minhash/ > minhash_log/gpt_perplexity.2021.04.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-05-filter/minhash/ > minhash_log/gpt_perplexity.2021.05.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-06-filter/minhash/ > minhash_log/gpt_perplexity.2021.06.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-08-filter/minhash/ > minhash_log/gpt_perplexity.2021.08.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-09-filter/minhash/ > minhash_log/gpt_perplexity.2021.09.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-10-filter/minhash/ > minhash_log/gpt_perplexity.2021.10.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2021-12-filter/minhash/ > minhash_log/gpt_perplexity.2021.12.log &
+nohup python gpt_perplexity.py /mnt/cfs/commoncrawl-2022-01-filter/minhash/ > minhash_log/gpt_perplexity.2022.01.log &

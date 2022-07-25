@@ -1,0 +1,15 @@
+*log/
+tmp/
+*.model
+*.ftz
+*.txt
+*.dict
+
+
+__pycache__/
+
+*.ckpt
+models/
+data/
+*.log
+*.out
