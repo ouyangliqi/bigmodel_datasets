@@ -10,7 +10,9 @@ from multiprocessing import Pool
 from datasketch import MinHash, MinHashLSH
 
 
-def query_minhash(mset, fin, fout):
+def query_minhash(fin, fout):
+    mset = MinHashLSH(threshold=0.95, num_perm=100)
+
     orig_doc = 0
     res_doc = 0
     fout = open(fout, "w")
@@ -22,12 +24,10 @@ def query_minhash(mset, fin, fout):
             l = MinHash(num_perm=100)  # a post
 
             words = set([w for doc_line in doc['cont'] for w in doc_line])
-            for w in words:
-                l.update(w.encode('utf-8'))
 
+            l.update("".join(words).encode('utf-8'))
 
-            with mset_lock:
-                similar = len(mset.query(l))
+            similar = len(mset.query(l))
 
             if similar == 0:
                 mset.insert(line, l)
@@ -43,8 +43,8 @@ subdir = sys.argv[1]
 # subdir = "/mnt/cfs/commoncrawl-2021-01-filter"
 start = time.time()
 
-mset = MinHashLSH(threshold=0.95, num_perm=100)
-mset_lock = threading.Lock()
+# mset = MinHashLSH(threshold=0.95, num_perm=100)
+# mset_lock = threading.Lock()
 
 p = Pool(20)
 jobs = []
@@ -55,11 +55,12 @@ for fn in glob.glob(subdir + "/**.txt"):
     pos = fn.rfind(".")
     fn_out = fn[:pos] + "_dedup" + fn[pos:]
     fn_out = fn_out.replace(
-            os.path.dirname(fn),
-            os.path.join(os.path.dirname(fn), 'minhash')
+            os.path.basename(os.path.dirname(fn)),
+            # os.path.join(os.path.dirname(fn), 'minhash')  # target dir
+            os.path.basename(os.path.dirname(fn))[:19] + "-s2-dedup"
         )
-
-    jobs.append(p.apply_async(query_minhash, (mset, fn, fn_out)))
+    # raise ValueError(fn_out)
+    jobs.append(p.apply_async(query_minhash, (fn, fn_out)))
 
 p.close()
 p.join()
