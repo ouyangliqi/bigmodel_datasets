@@ -2,9 +2,40 @@ import multiprocessing as mp
 import os
 import sys
 import time
-
+from concurrent.futures import ProcessPoolExecutor as Pool
+import logging
+from logging.handlers import QueueHandler, QueueListener
+from typing import Text
 sys.path.append(os.path.abspath(".."))
 from util.utils import *
+
+
+def worker_init(q):
+    # all records from worker processes go to qh and then into q
+    qh = QueueHandler(q)
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(qh)
+
+
+def logger_init(name_logfile, path_logfile):
+    q = mp.Queue()
+    # this is the handler for all log records
+    path_logfile = path_logfile + name_logfile
+    formatter = logging.Formatter('[%(asctime)s][%(filename)s][line:%(lineno)d][%(levelname)s]: %(message)s')
+    fileHandler = logging.FileHandler(path_logfile, mode='w')
+    fileHandler.setFormatter(formatter)
+
+    # ql gets records from the queue and sends them to the handler
+    ql = QueueListener(q, fileHandler)
+    ql.start()
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+    # add the handler to the logger so records from this process are handled
+    logger.addHandler(fileHandler)
+
+    return ql, q
 
 
 def chunkify_file(filepath, num_chunks, skiplines=-1):
@@ -65,6 +96,7 @@ def parallel_apply_line_by_line_chunk(chunk_data):
     i = 0
     st = time.time()
 
+    # textcnn = TextCNN()
     fasttext_model = TextAuditing()
     # func_args.append(fasttext_model)
 
@@ -95,11 +127,12 @@ def parallel_apply_line_by_line_chunk(chunk_data):
 
             if f.tell() - chunk_start >= chunk_size:
                 break
-
+    # del textcnn
+    # torch.cuda.empty_cache()
     return res, length
 
 
-def parallel_apply_line_by_line(input_file_path, num_procs, func_apply, func_args, skiplines=0, fout=None, merge_func=None):
+def parallel_apply_line_by_line(input_file_path, num_procs, func_apply, func_args, loger_args, skiplines=0, fout=None, merge_func=None):
     """
     function to apply a supplied function line by line in parallel
 
@@ -115,6 +148,7 @@ def parallel_apply_line_by_line(input_file_path, num_procs, func_apply, func_arg
         merged output
     """
     num_parallel = num_procs
+    print(input_file_path)
     print(f'num parallel: {num_procs}')
 
     jobs = chunkify_file(input_file_path, num_procs, skiplines)
@@ -123,20 +157,25 @@ def parallel_apply_line_by_line(input_file_path, num_procs, func_apply, func_arg
 
     print("Starting the parallel pool for {} jobs ".format(len(jobs)))
 
-    pool = mp.Pool(num_parallel, maxtasksperchild=1000)  # maxtaskperchild - if not supplied some weird happend and memory blows as the processes keep on lingering
+    # q_listener, q = logger_init(*loger_args)
+
+    # pool = mp.Pool(num_parallel, worker_init, [q], maxtasksperchild=1000)  # maxtaskperchild - if not supplied some weird happend and memory blows as the processes keep on lingering
 
     outputs = []
     length = []
 
     t1 = time.time()
-    chunk_outputs = pool.map(parallel_apply_line_by_line_chunk, jobs)
+    with Pool(num_parallel) as pool:
+        chunk_outputs = pool.map(parallel_apply_line_by_line_chunk, jobs)
+    # chunk_outputs = pool.map(parallel_apply_line_by_line_chunk, jobs)
 
     for i, output in enumerate(chunk_outputs):
         outputs.extend(output[0])
         length.extend(output[1])
 
-    pool.close()
-    pool.terminate()
+    # pool.close()
+    # pool.terminate()
+    # q_listener.stop()
 
     if merge_func is not None:
         print('merging outputs...')

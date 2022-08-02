@@ -10,19 +10,14 @@ def remove_codes(text):
 
     # remove .
     # print("2")
-    pattern = re.compile(r'[\.]{6,}')
-    text = pattern.sub('', text)
-
-    # 重复模式匹配，删除连续重复三次或以上的模式，保留一次模式
-    # print("3")
-    pattern = re.compile(r'(.+?)\1\1+')
-    text = pattern.sub(r'\1', text)
+    # pattern = re.compile(r'[\.]{6,}')
+    # text = pattern.sub('', text)
 
     # (REMOVE <SCRIPT> to </script> and variations)
     # print("4")
     # if "script" in text or "html" in text or "style" in text or "div" in text:
-    pattern = r'<\s*[script|html|style|div][^>]*>.*?<\s*\/\s*[script|html|style|div]\s*>'  # mach any char zero or more times
-    text = "" if re.findall(pattern, text) else text
+    # pattern = r'<\s*[script|html|style|div][^>]*>.*?<\s*\/\s*[script|html|style|div]\s*>'  # mach any char zero or more times
+    # text = "" if re.findall(pattern, text) else text
 
     # # (REMOVE HTML <STYLE> to </style> and variations)
     # print("6")
@@ -31,8 +26,14 @@ def remove_codes(text):
 
     # # (REMOVE HTML COMMENTS <!-- to --> and variations)
     # print("7")
-    pattern = r'<[ ]*!--.*?--[ ]*>'  # mach any char zero or more times
-    text = re.sub(pattern, '', text, flags=(re.IGNORECASE | re.MULTILINE | re.DOTALL))
+    # pattern = r'<[ ]*!--.*?--[ ]*>'  # mach any char zero or more times
+    # text = re.sub(pattern, '', text, flags=(re.IGNORECASE | re.MULTILINE | re.DOTALL))
+
+    # remove wiki tags
+    text = re.sub(r'^Category:.*$', '', text, flags=re.MULTILINE)
+
+    # # remove unprintable characters
+    # text = re.sub(r"\\u.{4}", "", text)
 
     return text
 

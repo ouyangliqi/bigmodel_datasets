@@ -12,6 +12,9 @@ from post_filter import *
 
 def main():
     # processed = [i.strip() for i in open("processed.txt")]
+    NUM_GPUS = 4
+    PROC_PER_GPU = 6
+    queue = Manager().Queue()
 
     base_dir = "/mnt/cfs/"
 
@@ -19,21 +22,23 @@ def main():
 
     start = time.time()
 
+    # initialize the queue with the GPU ids
+    for gpu_ids in range(NUM_GPUS):
+        for _ in range(PROC_PER_GPU):
+            queue.put(gpu_ids)
+
     # p = Pool(NUM_GPUS * PROC_PER_GPU, maxtasksperchild=1000)
-    with ProcessPoolExecutor(2) as executor:
-        features = []
-        for f in glob.glob(base_dir + subdir + "/*txt"):
-            # if os.path.basename(f) in processed:
-            #     print(f)
-            #     continue
-            features.append(executor.submit(main_filter, f, base_dir + subdir[0:19] + "-s3-filter", None))
-        wait(features)
 
-        # p.apply_async(main_filter, args=(f, base_dir + subdir[0:19] + "-s3-filter", queue))
+    p = Pool(20)
+    for f in glob.glob(base_dir + subdir + "/*txt"):
+        # if os.path.basename(f) in processed:
+        #     print(f)
+        #     continue
+        p.apply_async(main_filter, args=(f, base_dir + subdir[0:19] + "-s3-filter", queue))
 
-    # p.close()
-    # p.join()
-    # p.terminate()
+    p.close()
+    p.join()
+    p.terminate()
 
 
     end = time.time()

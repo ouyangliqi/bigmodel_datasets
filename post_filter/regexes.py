@@ -266,7 +266,7 @@ def fixup(text, fname):
     #     text = fix_encoding_screwup(text)
 
     text = normalize_newlines(text)
-    text = myle_ftfy(text)
+    # text = myle_ftfy(text)
 
     if 'Gutenberg' in fname:
         text = pg19_strips(text)

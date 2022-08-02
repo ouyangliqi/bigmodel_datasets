@@ -3,13 +3,17 @@ import glob
 import json
 import os
 import pickle as pkl
+import random
+from cProfile import label
 
 import fasttext
 import numpy as np
 import sentencepiece as spm
 import torch
 from flashtext import KeywordProcessor
+from line_profiler import LineProfiler
 from tqdm import tqdm
+from zmq import device
 
 from .data.textcnn.models.TextCNN import *
 
@@ -17,6 +21,7 @@ fasttext.FastText.eprint = lambda x: None
 
 MAX_VOCAB_SIZE = 10000  # 词表长度限制
 UNK, PAD = '<UNK>', '<PAD>'  # 未知字，padding符号
+
 
 class Cleaner:
     def __init__(self, load_path=None) -> None:
@@ -93,10 +98,9 @@ def load_vocab(fn: str):
 
 class TextAuditing:
     def __init__(self) -> None:
-        self.model = fasttext.load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/fastxt_v2/text-auditing-model.ftz"))
+        self.model = fasttext.load_model(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/fastxt_v3/text-auditing-model.ftz"))
         self.spm_model = spm.SentencePieceProcessor()
-        self.spm_model.Load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/fastxt_v2/lang.model"))
-
+        self.spm_model.Load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "data/fastxt_v3/lang.model"))
 
     def predict(self, text):
         pre_text = " ".join(self.spm_model.EncodeAsPieces(text.strip()))
@@ -106,8 +110,9 @@ class TextAuditing:
     def batch_predict(self, texts):
         texts = [" ".join(self.spm_model.EncodeAsPieces(i.strip()[:256])) for i in texts]
         label, pro = self.model.predict(texts)
-        return label, pro
-
+        labels = [i[0] for i in label]
+        pros = [i[0] for i in pro]
+        return labels, pros
 
 class TextCNN:
     def __init__(self) -> None:
@@ -124,36 +129,10 @@ class TextCNN:
             pkl.dump(self.vocab, open(self.config.vocab_path, 'wb'))
 
         self.config.n_vocab = len(self.vocab)
+
         self.model = Model(self.config).to(self.config.device)
 
         self.model.load_state_dict(torch.load(self.config.save_path))
-
-
-    def predict(self, text):
-        words_line = []
-
-        self.model.eval()
-        token = self.tokenizer(text)
-        seq_len = len(token)
-        pad_size = self.config.pad_size
-        if pad_size:
-            if len(token) < pad_size:
-                token.extend([PAD] * (pad_size - len(token)))
-            else:
-                token = token[:pad_size]
-                seq_len = pad_size
-        # word to id
-        for word in token:
-            words_line.append(self.vocab.get(word, self.vocab.get(UNK)))
-
-        text_token = torch.LongTensor([words_line]).to(self.config.device)
-        seq_len = torch.LongTensor([seq_len]).to(self.config.device)
-        datas = (text_token, seq_len)
-        with torch.no_grad():
-            outputs = self.model(datas)
-            values, indices = torch.max(outputs, dim=1)
-
-        return indices.item(), values.item()
 
     def build_vocab(self, file_path, tokenizer, max_size, min_freq):
         vocab_dic = {}
@@ -170,6 +149,39 @@ class TextCNN:
             vocab_dic.update({UNK: len(vocab_dic), PAD: len(vocab_dic) + 1})
         return vocab_dic
 
+    def tokenize(self, text):
+        tokens = [self.vocab.get(word, self.vocab.get(UNK)) for word in self.tokenizer(text)]
+        pad_size = self.config.pad_size
+        pad_id = self.vocab.get(PAD)
+        if pad_size:
+            if len(tokens) < pad_size:
+                tokens.extend([pad_id] * (pad_size - len(tokens)))
+            else:
+                tokens = tokens[:pad_size]
+        return tokens
+
+    def predict(self, text):
+        self.model.eval()
+        text_token = torch.LongTensor([self.tokenize(text)]).to(self.config.device)
+        with torch.no_grad():
+            outputs = self.model(text_token)
+            values, indices = torch.max(outputs, dim=1)
+
+        return indices.item(), values.item()
+
+    def batch_predict(self, texts):
+        self.model.eval()
+        labels, pros = [], []
+        tokenized = [self.tokenize(text) for text in texts]
+        text_token = torch.LongTensor(tokenized).to(self.config.device)
+        with torch.no_grad():
+            outputs = self.model(text_token)
+            pro, label = torch.max(outputs, dim=1)
+        labels = label.tolist()
+        pros = pro.tolist()
+        del text_token
+        return labels, pros
+
 
 if __name__ == "__main__":
     # blandness = Blandness()
@@ -185,6 +197,20 @@ if __name__ == "__main__":
     #     new_npc[k] = v
     # json.dump(new_npc, open("npc_cdn_new.json", "w"), ensure_ascii=False, indent=4)
 
+    lprofiler = LineProfiler(TextAuditing.batch_predict, TextCNN.batch_predict, TextCNN.tokenize)
+
+    texts = ["服务项目: 我们拥有坚持专业经营的理念『以客为尊』，提供客户最安心、最贴心、最用心的服务，并且提供全方位不动产经纪贴心服务。", "物件标的： 大湖国小;湖内国中附近 建物楼层： 共 3楼", "请告知房仲服务人员，您是在『104报纸房屋网 - 台庆冈山国宅店 』看到此物件，感恩您。", "(可择一输入即可, 请勿输入数字以外的任何符号, 输入时请连续输入数字即可。)", "您好~我想了解这个物件,请跟我联络,谢谢!", "点选填妥送出后,请稍后一段时间,静待系统将您的留言讯息发送简讯给该联络人。"]
+    print(len(texts), len("".join(texts)))
+
     auditing = TextAuditing()
-    print(auditing.batch_predict(['顶尖波王005期：【顶尖波王】 模棱两可_六合宝典论坛', '下载【六合宝典】APP，随时随地看资料。', '首页', '走势', '更多', '资料', '投注', '香港挂牌', '曾道人论坛', '四不像图论坛', '红姐图库', '精准计划', '彩库宝典', '开奖记录', '开奖日期', '开奖数据', '全年图纸', '四不像论坛', '挂牌论坛', '看贴', '这料只为论坛忠实彩民（六合宝典）', '综合各大高手公式得出以下资料.值得参考', '005期:必中⑨肖:虎猴狗蛇兔马牛猪龙', '005期:必中⑥肖:虎猴狗蛇兔马', '005期:必中③肖:虎猴狗 必中③码:23.35.05', '005期:平特②肖:(虎拖猴) 平特②尾:(3尾拖5尾)', '2021提高网站速度,减少各位看官流量', '帖子不保留大量往期记录，2020的请自行保存！', '001期:↖↗顶尖波王══《蓝波防红波》══开:34准中', '002期:↖↗顶尖波王══《绿波防红波》══开:33准中', '003期:↖↗顶尖波王══《绿波防红波》══开:43准中', '004期:↖↗顶尖波王══《蓝波防红波》══开:02准中', '005期:↖↗顶尖波王══《蓝波防绿波》══开:00准中', '眼神韵律 投资稳赚【投资十码】已公开,中奖率99%', '人亦已歌 投资稳赚【平特投资】已公开,中奖率99%', '梦回旧景 理财稳赚【理财六肖】已公开,中奖率99%', '旧事惘然 计划稳赚【大小计划】已公开,中奖率99%', '上世笑眸 理财稳赚【赚钱家野】已公开,中奖率99%', 'Copyright ©2020 手机开奖站 0141000.com 请记好，以便再次访问 六合宝典论坛']))
+    cnn = TextCNN()
+
+    lprofiler.enable()
+    print(auditing.batch_predict(texts))
+
+    print(cnn.batch_predict(texts))
+
+    lprofiler.disable()
+    lprofiler.print_stats()
+
 

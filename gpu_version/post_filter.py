@@ -6,22 +6,21 @@ import time
 from multiprocessing import Manager, current_process
 from multiprocessing.dummy import Manager
 
+from chunkify import parallel_apply_line_by_line
 from joblib import Parallel, delayed
 from line_profiler import LineProfiler
-
-from chunkify import parallel_apply_line_by_line
 
 sys.path.append(os.path.abspath(".."))
 
 import logging
 
 from cleantext import clean
+from remove_codes import remove_codes
 from util.langconv import *
 from util.utils import *
 
-from remove_codes import remove_codes
-
 logger = None
+
 
 def setup_logger(name_logfile, path_logfile):
     path_logfile = path_logfile + name_logfile
@@ -251,19 +250,19 @@ def main_filter(fn: str, out_dir, queue=None):
 
         res = []
 
-        # model_type = "textcnn"
-        # textcnn = TextCNN()
+        model_type = "textcnn"
+        textcnn = TextCNN()
         # model_type = "fasttext"
         # fasttext_model = TextAuditing()
 
-        # res, orig_doc_line, res_doc_line = single_process(fn, cleaner, fasttext_model, model_type)
+        res, orig_doc_line, res_doc_line = single_process(fn, cleaner, textcnn, model_type)
 
-        # if model_type == "textcnn":
-        #     del textcnn
-        #     torch.cuda.empty_cache()
+        if model_type == "textcnn":
+            del textcnn
+            torch.cuda.empty_cache()
 
         # multiprocess
-        res, orig_doc_line = parallel_apply_line_by_line(fn, 20, process_line, [fn, cleaner, logger], loger_args=[os.path.basename(fn) + 'processed.log', log_path])
+        # res, orig_doc_line = parallel_apply_line_by_line(fn, 20, process_line, [fn, cleaner, logger], loger_args=[os.path.basename(fn) + 'processed.log', log_path])
 
         if res:
             fp_out = open(fn_out, "w")
@@ -299,65 +298,3 @@ if __name__ == "__main__":
 
 
 
-# for line in f:
-#     doc = json.loads(line[:-1])
-#     lines_keep = []
-#     orig_doc_line += len(doc["cont"])
-
-#     valid = check_if_doc_valid_only1model(doc["cont"], cleaner, fasttext_model, "fasttext")
-#     for doc_line in valid:
-#         fixed_text = fixup(doc_line, fn)
-#         if len(fixed_text) > 1:
-#             lines_keep.append(fixed_text)
-
-
-#     res_doc_line += len(lines_keep)
-#     if len(lines_keep) > 0:
-#         doc["cont"] = lines_keep
-#         res.append(doc)
-
-
-#266013
-#221442
-        # res = Parallel(n_jobs=8, backend="threading")(delayed(process_line)(fn, line, cleaner, fasttext_model, orig_doc_line) for line in f.readlines()[:100])
-        # res_doc_line = sum([len(doc["cont"]) for doc in res])
-
-
-
-# def merge_prediction_result(fastext_model, textcnn_model, cont):
-#     flag = True
-
-#     label_1, pro_1 = fastext_model.predict(cont)
-#     label_2, pro_2 = textcnn_model.predict(cont)
-
-#     if label_1 == label_2:
-#         if label_1[0] == "__label__0":
-#             flag = True
-#         else:
-#             flag = False
-#     else:
-#         if label_2 == 2 and label_1[0] != "__label__2":
-#             flag = True
-#         elif ((label_2 == 0 or label_2 == 3 or label_2 == 5 or label_2 == 4) and pro_2 >= 0.5):
-#             flag = True
-#         else:
-#             flag = False
-#     return flag, label_1[0], label_2
-
-
-# def check_if_doc_valid(content, cleaner, fastext_model, textcnn_model):
-#     valid = []
-#     for cont in content:
-#         if blacklist(cont, cleaner):
-#             logger.info("unvalid content: {}".format(cont))
-#             return []
-#         flag, label_1, label_2 = merge_prediction_result(fastext_model, textcnn_model, cont)
-#         if flag:
-#             if label_2 != 4:
-#                 valid.append(cont)
-#             else:
-#                 logger.info("remove unvalid adv {}".format(cont))
-#                 return []
-#         else:
-#             logger.info("unvalid content detected by model: {}, fasttext_label {}, textcnn_label {}".format(cont, label_1, label_2))
-#     return valid

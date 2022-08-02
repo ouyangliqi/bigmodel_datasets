@@ -25,7 +25,9 @@ def query_minhash(fin, fout):
 
             words = set([w for doc_line in doc['cont'] for w in doc_line])
 
-            l.update("".join(words).encode('utf-8'))
+            for word in words:
+                l.update(word.encode('utf-8'))
+            # l.update("".join(words).encode('utf-8'))
 
             similar = len(mset.query(l))
 
